@@ -1,14 +1,14 @@
 from pathlib import Path
 from SignalGenerator import DroneSignalGenerator, SignalRecorder
 
-t_signal = 9.5 # s
-f_sample = 44100 # Hz
+t_signal = 10
+f_sample = 48000
 
 drone_signal = DroneSignalGenerator(
-    rpm_list = [15010, 14962, 13536, 13007],
-    num_blades_per_rotor = 2,
-    sample_freq = f_sample,
-    num_samples = f_sample * t_signal,
+    rpm_list=[15010, 14962, 13536, 13007],
+    num_blades_per_rotor=2,
+    sample_freq=f_sample,
+    num_samples=int(f_sample * t_signal),
     rms=1
 )
 
@@ -24,15 +24,31 @@ files = [
     "sunflower_64.xml",
 ]
 
+print(f"--- STARTING SIGNAL GENERATION ---")
+print(f"Parameters: {t_signal}s | {f_sample}Hz")
+print(f"Geometries count: {len(files)}")
+print(f"Trajectories per geometry: 3")
+print("-" * 40)
+
 for i, filename in enumerate(files):
     fpath = geom_folder / filename
 
     if not fpath.exists():
-        print(f"!!! File not found: {filename}. Skipping.")
+        print(f"!!! ERROR: Geometry file not found: {filename}. Skipping.")
         continue
 
-    print(f"\n[{i + 1}/{len(files)}] Processing: {filename} ...")
+    print(f"\n[{i + 1}/{len(files)}] Processing geometry: {filename}")
 
-    recorder = SignalRecorder(fpath, drone_signal)
+    try:
+        recorder = SignalRecorder(fpath, drone_signal)
 
-    recorder.run_dynamic()
+        recorder.run_linear()
+        recorder.run_diagonal()
+        recorder.run_circle()
+
+    except Exception as e:
+        print(f"!!! An error occurred while processing {filename}: {e}")
+
+print("\n" + "="*40)
+print("=== ALL RECORDINGS GENERATED SUCCESSFULLY ===")
+print("Files are located in: signal/dynamic/")

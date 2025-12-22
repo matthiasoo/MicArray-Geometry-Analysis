@@ -1,4 +1,5 @@
 import copy
+import os
 import acoular as ac
 import numpy as np
 from IPython.core.pylabtools import figsize
@@ -56,6 +57,7 @@ class DroneSignalGenerator(ac.NoiseGenerator):
                 # return signal normalized to given RMS value
         return sig * self.rms / np.std(sig)
 
+
 class SignalRecorder:
     def __init__(self, geom_path, signal_src):
         self.geom_path = Path(geom_path)
@@ -64,75 +66,116 @@ class SignalRecorder:
         self.mics = ac.MicGeom(from_file=geom_path)
         self.signal = signal_src
         self.env = ac.Environment()
-        self.output_dir = Path('signal')
+        self.output_dir = Path('signal/dynamic')
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.output_name = self.geom_path.stem
 
-    def run_static(self, loc=(0, 0, 10)) :
-        p = ac.PointSourceDipole(
-            signal=self.signal,
-            mics=self.mics,
-            env=self.env,
-            loc=loc,
-        )
+        self.duration = self.signal.num_samples / self.signal.sample_freq
 
-        save_path = self.output_dir / 'static'
-        save_path.mkdir(parents=True, exist_ok=True)
-        all_channels = list(range(self.mics.num_mics))
+    def _generate_and_save(self, trajectory, suffix):
 
-        file_wav = save_path / f"{self.output_name}_static.wav"
-        output = ac.WriteWAV(source=p, name=str(file_wav), channels=all_channels)
-        output.save()
-        print(f"WAV saved: {file_wav}")
-
-    def run_dynamic(self, speed=10.0, height=10.0, start_offset=0.5):
-        t_traj = np.arange(10) # traj duration
-
-        waypoints = { t : ((t - 5) * speed, 0.0, height) for t in t_traj }
-        traj = ac.Trajectory(points=waypoints)
-
+        # main src
         p = ac.MovingPointSourceDipole(
             signal=self.signal,
-            trajectory=traj,
+            trajectory=trajectory,
             mics=self.mics,
             env=self.env,
             conv_amp=True,
-            start=start_offset,
+            start=0.0,
             direction=(0, 0, 1)
         )
 
-        waypoints_reflection = {time: (x, y, -z) for time, (x, y, z) in waypoints.items()}
-        traj_reflection = ac.Trajectory(points=waypoints_reflection)
+        traj_points = trajectory.points
+        mirror_points = {t: (coord[0], coord[1], -coord[2]) for t, coord in traj_points.items()}
+        traj_mirror = ac.Trajectory(points=mirror_points)
 
         # mirror src
         p_reflection = ac.MovingPointSourceDipole(
             signal=self.signal,
-            trajectory=traj_reflection,
+            trajectory=traj_mirror,
             conv_amp=True,
             mics=self.mics,
-            start=0.5,
+            start=0.0,
             env=self.env,
             direction=(0, 0, -1)
         )
 
+        # noise
         wn_gen = ac.WNoiseGenerator(
             sample_freq=self.signal.sample_freq,
             num_samples=self.signal.num_samples,
             seed=100,
             rms=0.05
         )
-
         n = ac.UncorrelatedNoiseSource(
             signal=wn_gen,
             mics=self.mics
         )
 
-        drone_above_ground = ac.SourceMixer(sources=[p, p_reflection, n])
+        drone_mix = ac.SourceMixer(sources=[p, p_reflection, n])
 
-        save_path = self.output_dir / 'dynamic'
-        save_path.mkdir(parents=True, exist_ok=True)
+        file_wav = self.output_dir / f"{self.output_name}_{suffix}.wav"
         all_channels = list(range(self.mics.num_mics))
 
-        file_wav = save_path / f"{self.output_name}_dynamic.wav"
-        output = ac.WriteWAV(source=drone_above_ground, name=str(file_wav), channels=all_channels)
+        if file_wav.exists():
+            try:
+                os.remove(file_wav)
+            except PermissionError:
+                print(f"Cannot delete {file_wav}. Is it open?")
+
+        output = ac.WriteWAV(source=drone_mix, name=str(file_wav), channels=all_channels)
         output.save()
-        print(f"WAV saved: {file_wav}")
+        print(f"--> Saved: {file_wav}")
+
+    def run_linear(self, height=10.0):
+        print(f"Generating LINEAR path for {self.output_name}...")
+
+        start_pos = -9.0
+        end_pos = 9.0
+
+        times = np.arange(0, self.duration, 0.1)
+        velocity = (end_pos - start_pos) / self.duration
+
+        waypoints = {}
+        for t in times:
+            x = start_pos + velocity * t
+            waypoints[t] = (x, 0.0, height)
+
+        traj = ac.Trajectory(points=waypoints)
+        self._generate_and_save(traj, "linear")
+
+    def run_diagonal(self, height=10.0):
+        print(f"Generating DIAGONAL path for {self.output_name}...")
+
+        start_x, start_y = -8.0, -8.0
+        end_x, end_y = 8.0, 8.0
+
+        times = np.arange(0, self.duration, 0.1)
+
+        waypoints = {}
+        for t in times:
+            progress = t / self.duration  # 0.0 do 1.0
+            x = start_x + (end_x - start_x) * progress
+            y = start_y + (end_y - start_y) * progress
+            waypoints[t] = (x, y, height)
+
+        traj = ac.Trajectory(points=waypoints)
+        self._generate_and_save(traj, "diagonal")
+
+    def run_circle(self, radius=8.0, height=10.0):
+        print(f"Generating CIRCLE path for {self.output_name}...")
+
+        times = np.arange(0, self.duration, 0.05)
+
+        omega = 2 * np.pi / self.duration
+
+        waypoints = {}
+        for t in times:
+            angle = omega * t + np.pi
+
+            x = radius * np.cos(angle)
+            y = radius * np.sin(angle)
+            waypoints[t] = (x, y, height)
+
+        traj = ac.Trajectory(points=waypoints)
+        self._generate_and_save(traj, "circle")

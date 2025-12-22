@@ -17,6 +17,17 @@ class Beamformer:
         self.micgeofile = Path(geom_path)
         self.gamma = gamma
 
+        self.geom_name = self.micgeofile.stem
+        self.signal_name = self.inputfile.stem
+
+        self.base_output_path = Path("results") / self.geom_name / self.signal_name / f"g{self.gamma}"
+
+        self.paths = {
+            "maps": self.base_output_path / "maps",
+            "data": self.base_output_path / "data",
+            "times": self.base_output_path / "times"
+        }
+
         self._prepare_directories()
 
         self.i = 0
@@ -26,9 +37,8 @@ class Beamformer:
         self._run()
 
     def _prepare_directories(self):
-        Path("results/times_bf").mkdir(parents=True, exist_ok=True)
-        Path("results/points_bf").mkdir(parents=True, exist_ok=True)
-        Path("results/maps").mkdir(parents=True, exist_ok=True)
+        for p in self.paths.values():
+            p.mkdir(parents=True, exist_ok=True)
 
     def _map_index_to_range(self, i, num, v_min=0, v_max=1):
         step = (v_max - v_min) / (num - 1)
@@ -72,16 +82,17 @@ class Beamformer:
             tempTS = ac.TimeSamples(data=tempData, sample_freq=samplerate)
             ps = ac.PowerSpectra(source=tempTS, block_size=128, overlap='50%', window='Hanning')
 
-            bb = ac.BeamformerFunctional(freq_data=ps, steer=st, gamma=fbf_gamma)
+            bb = ac.BeamformerFunctional(freq_data=ps, steer=st, gamma=fbf_gamma, r_diag=False)
 
-            tempRes = np.sum(bb.result[0:32], 0)
+            tempRes = np.sum(bb.result[4:32], 0)
+            # tempRes = np.nan_to_num(tempRes, nan=0.0)
             r = tempRes.reshape(rg.shape)
 
             if np.isnan(r).any():
                 print("\n!!! WARNING: NaN detected !!!")
             if np.iscomplex(r).any():
                 print("\n!!! WARNING: Complex numbers detected !!!")
-            print(f"\nMin: {np.min(r)}, Max: {np.max(r)}")
+            # print(f"\nMin: {np.min(r)}, Max: {np.max(r)}")
 
             p = np.unravel_index(np.argmax(r), r.shape)
             px = self._map_index_to_range(p[0], r.shape[0], rg.extend()[0], rg.extend()[1])
@@ -97,9 +108,10 @@ class Beamformer:
             )
             fst = ac.SteeringVector(grid=frg, mics=mg, steer_type='classic')
 
-            bf = ac.BeamformerFunctional(freq_data=ps, steer=fst, gamma=fbf_gamma)
+            bf = ac.BeamformerFunctional(freq_data=ps, steer=fst, gamma=fbf_gamma, r_diag=False)
 
             tempFRes = np.sum(bf.result[8:16], 0)
+            # tempFRes = np.nan_to_num(tempFRes, nan=0.0)
             fr = tempFRes.reshape(frg.shape)
 
             fp = np.unravel_index(np.argmax(fr), fr.shape)
@@ -130,15 +142,15 @@ class Beamformer:
         print("Max frame time: ", max_frame_time, 's')
         print("Min frame time: ", min_frame_time, 's')
 
-        with open(Path("results/times_bf") / "times.log", "a") as f:
+        with open(self.paths["times"] / f"times_g{self.gamma}.log", "a") as f:
             f.write(
                 f"{self.inputfile.stem},{self.algorithm},{pt},{t2 - t1},{total_frame_time},{avg_frame_time},{max_frame_time},{min_frame_time}\n")
 
         points = np.array([frame[1] for frame in self.frames])  # (px, py)
         focus_points = np.array([frame[3] for frame in self.frames])  # (fpx, fpy)
 
-        np.save(f"results/points_bf/{self.inputfile.stem}_{self.algorithm}_points.npy", points)
-        np.save(f"results/points_bf/{self.inputfile.stem}_{self.algorithm}_focuspoints.npy", focus_points)
+        np.save(self.paths["data"] / f"{self.inputfile.stem}_g{self.gamma}_points.npy", points)
+        np.save(self.paths["data"] / f"{self.inputfile.stem}_g{self.gamma}_focuspoints.npy", focus_points)
 
         self._generate_animation(rg, frg_span, FPS, frames_count)
 
@@ -184,7 +196,7 @@ class Beamformer:
 
         ani = animation.FuncAnimation(fig, update, frames=self.frames, init_func=init, repeat=True, interval=1 / FPS)
 
-        output_file = f"results/maps/{self.inputfile.stem}_g{self.gamma}.mp4"
+        output_file = self.paths["maps"] / f"{self.inputfile.stem}_g{self.gamma}.mp4"
         ani.save(output_file, writer="ffmpeg", fps=FPS)
         plt.close()
         print(f"\nAnimation saved: {output_file}")
