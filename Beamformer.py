@@ -109,7 +109,7 @@ class Beamformer:
             tempTS = ac.TimeSamples(data=block, sample_freq=samplerate)
             ps = ac.PowerSpectra(source=tempTS, block_size=128, overlap='50%', window='Hanning', precision='complex128')
 
-            original_csm =ps.csm
+            original_csm = ps.csm
 
             eye_matrix = np.eye(original_csm.shape[1])
 
