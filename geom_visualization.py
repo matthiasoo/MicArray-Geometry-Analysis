@@ -7,12 +7,13 @@ output_folder = Path('geom/visuals')
 output_folder.mkdir(parents=True, exist_ok=True)
 
 files = [
-    "rect_4.xml",
-    "rect_16.xml",
-    "rect_64.xml",
-    "ring_32.xml",
-    "spiral_64.xml",
-    "sunflower_64.xml",
+    "2_mics.xml",
+    # "rect_4.xml",
+    # "rect_16.xml",
+    # "rect_64.xml",
+    # "ring_32.xml",
+    # "spiral_64.xml",
+    # "sunflower_64.xml",
 ]
 
 for filename in files:
