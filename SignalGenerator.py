@@ -180,3 +180,25 @@ class SignalRecorder:
 
         traj = ac.Trajectory(points=waypoints)
         self._generate_and_save(traj, "circle")
+
+    def run_helix(self, z_start=5.0, z_end=-5.0, radius=5.0, turns=2.0):
+        print(f"Generating HELIX path for {self.output_name}...")
+
+        times = np.arange(0, self.duration, 0.05)
+
+        z_values = np.linspace(z_start, z_end, len(times))
+
+        total_angle = 2 * np.pi * turns
+
+        angles = (times / self.duration) * total_angle
+
+        waypoints = {}
+        for i, t in enumerate(times):
+            x = radius * np.cos(angles[i])
+            y = radius * np.sin(angles[i])
+            z = z_values[i]
+
+            waypoints[t] = (x, y, z)
+
+        traj = ac.Trajectory(points=waypoints)
+        self._generate_and_save(traj, "helix")
