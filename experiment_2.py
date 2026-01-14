@@ -10,18 +10,12 @@ import time
 import os
 from Beamformer import Beamformer
 
-# ==========================================
-# KONFIGURACJA EKSPERYMENTU 2
-# ==========================================
-
-# Ścieżki do plików wejściowych (zgodne z poprzednimi krokami)
 GEOM_DIR = Path("geom")
 SIGNAL_DIR = Path("signal/dynamic")
 
-# Wybrane parametry
 geometries = ["rect_64", "sunflower_64"]
 gammas = [-1, 1, 4, 50, 300]
-trajectory_type = "circle"  # Najbardziej reprezentatywna
+trajectory_type = "circle"
 
 print(f"--- START EXPERIMENT 2: BEAMWIDTH ANALYSIS ---")
 print(f"Geometries: {geometries}")
@@ -32,11 +26,9 @@ for geom_name in geometries:
     for g in gammas:
         print(f"\n>>> PROCESSING: {geom_name} | Gamma = {g}")
 
-        # Ścieżki do konkretnych plików
         geom_path = GEOM_DIR / f"{geom_name}.xml"
         wav_path = SIGNAL_DIR / f"{geom_name}_{trajectory_type}.wav"
 
-        # Sprawdzenie czy pliki istnieją
         if not geom_path.exists():
             print(f"!!! ERROR: Missing geometry file: {geom_path}")
             continue
