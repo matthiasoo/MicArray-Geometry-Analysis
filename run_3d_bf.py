@@ -17,5 +17,5 @@ wav_path = signal_folder / "cube_14_helix.wav"
 Beamformer3D(
     geom_path=str(geom_path),
     inputfile_path=str(wav_path),
-    gamma=10
+    gamma=1
 )
